@@ -15,9 +15,8 @@
     "amplify:generate": "ampx generate graphql-client-code --format typescript"
   },
   "dependencies": {
-    "@aws-amplify/adapter-nextjs": "^0.0.2-next.a1ea0f2.0",
     "@aws-amplify/ui-react": "^6.11.2",
-    "aws-amplify": "^6.0.1-next.a1ea0f2.0",
+    "aws-amplify": "^6.15.4",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
