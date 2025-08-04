@@ -70,6 +70,7 @@ const schema = a.schema({
       // Relationships
       items: a.hasMany('InvoiceItem', 'invoiceId'),
       payments: a.hasMany('Payment', 'invoiceId'),
+      paymentSchedules: a.hasMany('PaymentSchedule', 'invoiceId'),
       createdAt: a.datetime(),
       updatedAt: a.datetime(),
     })
