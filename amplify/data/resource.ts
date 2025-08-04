@@ -33,7 +33,7 @@ const schema = a.schema({
       name: a.string().required(),
       description: a.string(),
       price: a.float().required(),
-      category: a.enum(['services', 'products', 'subscription', 'one-time']),
+      category: a.enum(['services', 'products', 'subscription', 'one_time']),
       taxRate: a.float().default(0.08),
       isActive: a.boolean().default(true),
       unit: a.string().default('each'), // hours, each, monthly, etc.
