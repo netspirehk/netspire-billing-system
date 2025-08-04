@@ -163,7 +163,7 @@ const schema = a.schema({
       entityId: a.string().required(),
       action: a.enum(['created', 'updated', 'deleted', 'sent', 'paid']),
       userId: a.string().required(),
-      changes: a.json(), // Store what changed
+      changes: a.string(), // Store what changed as JSON string
       timestamp: a.datetime().required(),
     })
     .authorization((allow) => [
