@@ -5,8 +5,8 @@ const schema = a.schema({
   Customer: a
     .model({
       name: a.string().required(),
-      email: a.email().required(),
-      phone: a.phone(),
+      email: a.string().required(),
+      phone: a.string(),
       address: a.string(),
       taxId: a.string(),
       status: a.enum(['active', 'inactive', 'suspended']),
