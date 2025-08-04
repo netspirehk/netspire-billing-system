@@ -24,7 +24,7 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated(),
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
-      allow.groups(['viewer']).to(['read'])
+      allow.groups(['viewer']).to(['read']),
     ]),
 
   // Product/Service model - enhanced from your current structure  
@@ -46,7 +46,7 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated(),
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
-      allow.groups(['viewer']).to(['read'])
+      allow.groups(['viewer']).to(['read']),
     ]),
 
   // Invoice model - enhanced from your current structure
@@ -77,7 +77,7 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated(),
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
-      allow.groups(['viewer']).to(['read'])
+      allow.groups(['viewer']).to(['read']),
     ]),
 
   // Invoice line items - new model for better normalization
@@ -98,7 +98,7 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated(),
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
-      allow.groups(['viewer']).to(['read'])
+      allow.groups(['viewer']).to(['read']),
     ]),
 
   // Payment model - enhanced from your current structure
@@ -120,7 +120,7 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated(),
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
-      allow.groups(['viewer']).to(['read'])
+      allow.groups(['viewer']).to(['read']),
     ]),
 
   // New models for enhanced functionality
@@ -138,7 +138,7 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated(),
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
-      allow.groups(['viewer']).to(['read'])
+      allow.groups(['viewer']).to(['read']),
     ]),
 
   EmailTemplate: a
@@ -154,7 +154,7 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated(),
       allow.groups(['admin']).to(['create', 'update', 'delete']),
-      allow.groups(['billing', 'viewer']).to(['read'])
+      allow.groups(['billing', 'viewer']).to(['read']),
     ]),
 
   AuditLog: a
