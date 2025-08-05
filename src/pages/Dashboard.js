@@ -12,6 +12,16 @@ const Dashboard = () => {
   const invoices = (rawInvoices || []).filter(inv => inv && inv.customerId && inv.invoiceNumber);
   const payments = (rawPayments || []).filter(p => p && p.invoiceId && typeof p.amount === 'number');
   
+  // Map backend enum values to user-friendly labels
+  const methodLabels = {
+    'bank_transfer': 'Bank Transfer',
+    'credit_card': 'Credit Card',
+    'check': 'Check',
+    'cash': 'Cash',
+    'paypal': 'PayPal',
+    'stripe': 'Stripe'
+  };
+  
   // Debug logging to check data availability
   console.log('Dashboard data:', { customers, invoices, payments, products });
   console.log('State:', state);
@@ -157,7 +167,7 @@ const Dashboard = () => {
                         <td>{customerInfo ? customerInfo.name : 'Unknown Customer'}</td>
                         <td style={{ fontWeight: '600', color: '#059669' }}>${(payment.amount || 0).toFixed(2)}</td>
                         <td>{payment.paymentDate ? format(new Date(payment.paymentDate), 'MMM dd, yyyy') : 'Unknown'}</td>
-                        <td>{payment.method || 'Unknown'}</td>
+                        <td>{methodLabels[payment.method] || payment.method || 'Unknown'}</td>
                       </tr>
                     );
                   })}

@@ -19,12 +19,22 @@ const Payments = () => {
     invoiceId: '',
     amount: '',
     paymentDate: new Date().toISOString().split('T')[0],
-    method: 'Bank Transfer',
+    method: 'bank_transfer',
     reference: '',
     notes: ''
   });
 
-  const paymentMethods = ['Bank Transfer', 'Credit Card', 'Check', 'Cash', 'PayPal', 'Wire Transfer', 'ACH'];
+  const paymentMethods = ['bank_transfer', 'credit_card', 'check', 'cash', 'paypal', 'stripe'];
+  
+  // Map backend enum values to user-friendly labels
+  const methodLabels = {
+    'bank_transfer': 'Bank Transfer',
+    'credit_card': 'Credit Card',
+    'check': 'Check',
+    'cash': 'Cash',
+    'paypal': 'PayPal',
+    'stripe': 'Stripe'
+  };
 
   const getInvoiceInfo = (invoiceId) => {
     if (!invoiceId) return null;
@@ -158,7 +168,7 @@ const Payments = () => {
       invoiceId: '',
       amount: '',
       paymentDate: new Date().toISOString().split('T')[0],
-      method: 'Bank Transfer',
+      method: 'bank_transfer',
       reference: '',
       notes: ''
     });
@@ -282,7 +292,7 @@ const Payments = () => {
           >
             <option value="all">All Methods</option>
             {uniquePaymentMethods.map(method => (
-              <option key={method} value={method}>{method}</option>
+              <option key={method} value={method}>{methodLabels[method] || method}</option>
             ))}
           </select>
         </div>
@@ -341,7 +351,7 @@ const Payments = () => {
                             color: '#374151'
                           }}
                         >
-                          {payment.method}
+                          {methodLabels[payment.method] || payment.method}
                         </span>
                       </td>
                       <td style={{ color: '#6b7280' }}>{payment.reference || '-'}</td>
@@ -464,7 +474,7 @@ const Payments = () => {
                   required
                 >
                   {paymentMethods.map(method => (
-                    <option key={method} value={method}>{method}</option>
+                    <option key={method} value={method}>{methodLabels[method]}</option>
                   ))}
                 </select>
               </div>

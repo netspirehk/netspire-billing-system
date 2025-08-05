@@ -112,7 +112,7 @@ const schema = a.schema({
       invoice: a.belongsTo('Invoice', 'invoiceId'),
       amount: a.float().required(),
       paymentDate: a.date().required(),
-      method: a.enum(['Bank Transfer', 'Credit Card', 'Check', 'Cash', 'PayPal', 'Wire Transfer', 'ACH', 'Stripe']),
+      method: a.enum(['cash', 'check', 'bank_transfer', 'credit_card', 'paypal', 'stripe']),
       reference: a.string(), // transaction ID, check number, etc.
       notes: a.string(),
       status: a.enum(['pending', 'completed', 'failed', 'refunded']),
