@@ -4,22 +4,9 @@ import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
 
 const BillingContext = createContext();
 
-// GraphQL client will be initialized after Amplify configuration
-let client = null;
-
-// Initialize client if not already done
-const getClient = () => {
-  if (!client) {
-    try {
-      client = generateClient();
-      console.log('✅ GraphQL client initialized');
-    } catch (error) {
-      console.error('❌ Failed to initialize GraphQL client:', error);
-      throw new Error('GraphQL client could not be initialized. Make sure Amplify is configured properly.');
-    }
-  }
-  return client;
-};
+// Initialize GraphQL client following official Amplify Gen 2 documentation
+const client = generateClient();
+console.log('✅ GraphQL client initialized successfully');
 
 // Initial state
 const initialState = {
@@ -68,10 +55,10 @@ function billingReducer(state, action) {
 
     // Product actions
     case 'SET_PRODUCTS':
-      return { ...state, products: action.payload, loading: false };
+      return { ...state, products: (action.payload || []).filter(p => p && p.name), loading: false };
     
     case 'ADD_PRODUCT':
-      return { ...state, products: [...state.products, action.payload] };
+      return { ...state, products: [...state.products, action.payload].filter(p => p && p.name) };
     
     case 'UPDATE_PRODUCT':
       return {
@@ -160,18 +147,17 @@ export function BillingProvider({ children }) {
     
     try {
       // Load all data in parallel
-      const clientInstance = getClient();
       const [customersResult, productsResult, invoicesResult, paymentsResult] = await Promise.all([
-        clientInstance.models.Customer.list(),
-        clientInstance.models.Product.list(),
-        clientInstance.models.Invoice.list(),
-        clientInstance.models.Payment.list()
+        client.models.Customer.list(),
+        client.models.Product.list(),
+        client.models.Invoice.list(),
+        client.models.Payment.list()
       ]);
 
-      dispatch({ type: 'SET_CUSTOMERS', payload: customersResult.data });
-      dispatch({ type: 'SET_PRODUCTS', payload: productsResult.data });
-      dispatch({ type: 'SET_INVOICES', payload: invoicesResult.data });
-      dispatch({ type: 'SET_PAYMENTS', payload: paymentsResult.data });
+      dispatch({ type: 'SET_CUSTOMERS', payload: customersResult.data || [] });
+      dispatch({ type: 'SET_PRODUCTS', payload: (productsResult.data || []).filter(p => p && p.name) });
+      dispatch({ type: 'SET_INVOICES', payload: invoicesResult.data || [] });
+      dispatch({ type: 'SET_PAYMENTS', payload: paymentsResult.data || [] });
       
     } catch (error) {
       console.error('Error loading data:', error);
@@ -185,8 +171,7 @@ export function BillingProvider({ children }) {
     customers: {
       create: async (customerData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Customer.create(customerData);
+          const result = await client.models.Customer.create(customerData);
           dispatch({ type: 'ADD_CUSTOMER', payload: result.data });
           return result.data;
         } catch (error) {
@@ -197,8 +182,8 @@ export function BillingProvider({ children }) {
       
       update: async (id, customerData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Customer.update({ id, ...customerData });
+
+          const result = await client.models.Customer.update({ id, ...customerData });
           dispatch({ type: 'UPDATE_CUSTOMER', payload: result.data });
           return result.data;
         } catch (error) {
@@ -209,8 +194,8 @@ export function BillingProvider({ children }) {
       
       delete: async (id) => {
         try {
-          const clientInstance = getClient();
-          await clientInstance.models.Customer.delete({ id });
+
+          await client.models.Customer.delete({ id });
           dispatch({ type: 'DELETE_CUSTOMER', payload: id });
         } catch (error) {
           dispatch({ type: 'SET_ERROR', payload: error.message });
@@ -223,35 +208,54 @@ export function BillingProvider({ children }) {
     products: {
       create: async (productData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Product.create(productData);
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Creating product:', productData);
+          
+          const result = await client.models.Product.create(productData);
+          console.log('Product creation result:', result);
+          
           dispatch({ type: 'ADD_PRODUCT', payload: result.data });
+          dispatch({ type: 'SET_LOADING', payload: false });
           return result.data;
         } catch (error) {
+          console.error('Product creation error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       },
       
       update: async (id, productData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Product.update({ id, ...productData });
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Updating product:', id, productData);
+          
+          const result = await client.models.Product.update({ id, ...productData });
+          console.log('Product update result:', result);
+          
           dispatch({ type: 'UPDATE_PRODUCT', payload: result.data });
+          dispatch({ type: 'SET_LOADING', payload: false });
           return result.data;
         } catch (error) {
+          console.error('Product update error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       },
       
       delete: async (id) => {
         try {
-          const clientInstance = getClient();
-          await clientInstance.models.Product.delete({ id });
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Deleting product:', id);
+          
+          await client.models.Product.delete({ id });
           dispatch({ type: 'DELETE_PRODUCT', payload: id });
+          dispatch({ type: 'SET_LOADING', payload: false });
         } catch (error) {
+          console.error('Product delete error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       }
@@ -261,8 +265,8 @@ export function BillingProvider({ children }) {
     invoices: {
       create: async (invoiceData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Invoice.create(invoiceData);
+
+          const result = await client.models.Invoice.create(invoiceData);
           dispatch({ type: 'ADD_INVOICE', payload: result.data });
           return result.data;
         } catch (error) {
@@ -273,8 +277,8 @@ export function BillingProvider({ children }) {
       
       update: async (id, invoiceData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Invoice.update({ id, ...invoiceData });
+
+          const result = await client.models.Invoice.update({ id, ...invoiceData });
           dispatch({ type: 'UPDATE_INVOICE', payload: result.data });
           return result.data;
         } catch (error) {
@@ -285,8 +289,8 @@ export function BillingProvider({ children }) {
       
       delete: async (id) => {
         try {
-          const clientInstance = getClient();
-          await clientInstance.models.Invoice.delete({ id });
+
+          await client.models.Invoice.delete({ id });
           dispatch({ type: 'DELETE_INVOICE', payload: id });
         } catch (error) {
           dispatch({ type: 'SET_ERROR', payload: error.message });
@@ -297,9 +301,9 @@ export function BillingProvider({ children }) {
       // Send invoice via email
       send: async (invoiceId) => {
         try {
-          const clientInstance = getClient();
+
           // This would trigger a Lambda function to send email
-          const result = await clientInstance.models.Invoice.update({ 
+          const result = await client.models.Invoice.update({ 
             id: invoiceId, 
             status: 'sent',
             sentAt: new Date().toISOString()
@@ -317,8 +321,8 @@ export function BillingProvider({ children }) {
     payments: {
       create: async (paymentData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Payment.create(paymentData);
+
+          const result = await client.models.Payment.create(paymentData);
           dispatch({ type: 'ADD_PAYMENT', payload: result.data });
           
           // Update invoice status if fully paid
@@ -342,8 +346,8 @@ export function BillingProvider({ children }) {
       
       update: async (id, paymentData) => {
         try {
-          const clientInstance = getClient();
-          const result = await clientInstance.models.Payment.update({ id, ...paymentData });
+
+          const result = await client.models.Payment.update({ id, ...paymentData });
           dispatch({ type: 'UPDATE_PAYMENT', payload: result.data });
           return result.data;
         } catch (error) {
@@ -354,8 +358,8 @@ export function BillingProvider({ children }) {
       
       delete: async (id) => {
         try {
-          const clientInstance = getClient();
-          await clientInstance.models.Payment.delete({ id });
+
+          await client.models.Payment.delete({ id });
           dispatch({ type: 'DELETE_PAYMENT', payload: id });
         } catch (error) {
           dispatch({ type: 'SET_ERROR', payload: error.message });

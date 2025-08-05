@@ -5,7 +5,10 @@ import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 const Reports = () => {
   const { state } = useBilling();
-  const { invoices, payments, customers, products } = state;
+  const { invoices, payments, customers, products: rawProducts } = state;
+  
+  // Ensure products is always a safe array with valid objects
+  const products = (rawProducts || []).filter(p => p && p.name);
   const [selectedPeriod, setSelectedPeriod] = useState('thisMonth');
 
   // Date range calculations
@@ -85,8 +88,8 @@ const Reports = () => {
   const productRevenue = {};
   filteredInvoices.forEach(invoice => {
     invoice.items.forEach(item => {
-      const product = products.find(p => p.id === item.productId);
-      if (product) {
+      const product = products.find(p => p && p.id === item.productId);
+      if (product && product.name) {
         const revenue = item.quantity * item.rate;
         productRevenue[product.name] = (productRevenue[product.name] || 0) + revenue;
       }

@@ -2,25 +2,30 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Amplify } from 'aws-amplify';
 
-// Import Amplify configuration - MUST be done before any other Amplify imports
-try {
-  // Try multiple possible locations for the amplify_outputs.json file
-  let outputs;
-  try {
-    outputs = require('./amplify_outputs.json');
-  } catch {
-    try {
-      outputs = require('../amplify_outputs.json');
-    } catch {
-      outputs = require('./aws-exports.js').default;
-    }
-  }
-  Amplify.configure(outputs);
-  console.log('✅ Amplify configured successfully');
-} catch (error) {
-  console.error('❌ Failed to configure Amplify:', error);
-  console.warn('Please ensure amplify_outputs.json is in the src/ directory or project root');
-}
+// Import Amplify configuration following official Gen 2 documentation
+// https://docs.amplify.aws/react/build-a-backend/data/set-up-data/
+import outputs from './amplify_outputs.json';
+
+console.log('🔍 Amplify outputs loaded:', {
+  hasAuth: !!outputs.auth,
+  hasData: !!outputs.data,
+  dataUrl: outputs.data?.url,
+  hasApiKey: !!outputs.data?.api_key
+});
+
+Amplify.configure(outputs);
+
+// Verify configuration was applied
+const appliedConfig = Amplify.getConfig();
+console.log('✅ Amplify configured successfully');
+console.log('🔗 GraphQL API URL:', outputs.data?.url);
+console.log('🔑 API Key configured:', !!outputs.data?.api_key);
+console.log('🔍 Applied config verification:', {
+  hasAPI: !!appliedConfig.API,
+  hasGraphQL: !!appliedConfig.API?.GraphQL,
+  hasAuth: !!appliedConfig.Auth,
+  keys: Object.keys(appliedConfig)
+});
 
 import Layout from './components/Layout/Layout';
 import Login from './components/Login/Login';

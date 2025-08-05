@@ -4,7 +4,10 @@ import { useBilling } from '../context/AmplifyBillingContext';
 
 const Products = () => {
   const { state, api } = useBilling();
-  const { products, loading } = state;
+  const { products: rawProducts, loading, error } = state;
+  
+  // Ensure products is always a safe array with valid objects
+  const products = (rawProducts || []).filter(p => p && p.name);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,13 +20,15 @@ const Products = () => {
     taxRate: '0.08'
   });
 
-  const categories = ['Services', 'Subscription', 'Design', 'Development', 'Consulting', 'Software', 'Hardware'];
+  const categories = ['Services', 'Subscription', 'Design', 'Development', 'Consulting', 'Software', 'Hardware', 'Products'];
 
   const getFilteredProducts = () => {
     return products.filter(product => {
+      if (!product || !product.name) return false;
+      
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchTerm.toLowerCase());
+        (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()));
       
       if (categoryFilter === 'all') return matchesSearch;
       return matchesSearch && product.category === categoryFilter;
@@ -31,7 +36,7 @@ const Products = () => {
   };
 
   const getUniqueCategories = () => {
-    const usedCategories = [...new Set(products.map(p => p.category))];
+    const usedCategories = [...new Set(products.filter(p => p && p.category).map(p => p.category))];
     return usedCategories;
   };
 
@@ -58,6 +63,7 @@ const Products = () => {
         await api.products.create(productData);
       }
       resetForm();
+      setShowModal(false);
     } catch (error) {
       console.error('Error saving product:', error);
       alert('Failed to save product. Please try again.');
@@ -115,6 +121,20 @@ const Products = () => {
             Add Product
           </button>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div style={{ 
+            backgroundColor: '#fee2e2', 
+            border: '1px solid #fecaca', 
+            borderRadius: '6px', 
+            padding: '12px', 
+            marginBottom: '16px',
+            color: '#dc2626'
+          }}>
+            <strong>Error:</strong> {error}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>

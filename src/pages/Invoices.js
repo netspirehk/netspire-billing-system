@@ -5,7 +5,10 @@ import { format } from 'date-fns';
 
 const Invoices = () => {
   const { state, api } = useBilling();
-  const { invoices, customers, products, loading } = state;
+  const { invoices, customers, products: rawProducts, loading } = state;
+  
+  // Ensure products is always a safe array with valid objects
+  const products = (rawProducts || []).filter(p => p && p.name);
   const [showModal, setShowModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,10 +91,10 @@ const Invoices = () => {
     
     // Auto-fill rate if product is selected
     if (field === 'productId' && value) {
-      const product = products.find(p => p.id === value);
-      if (product) {
-        newItems[index].rate = product.price;
-        newItems[index].description = product.description || product.name;
+      const product = products.find(p => p && p.id === value);
+      if (product && product.name) {
+        newItems[index].rate = product.price || 0;
+        newItems[index].description = product.description || product.name || '';
       }
     }
     
@@ -346,7 +349,7 @@ const Invoices = () => {
                             className="form-control"
                           >
                             <option value="">Select product</option>
-                            {products.map(product => (
+                            {products.filter(product => product && product.name).map(product => (
                               <option key={product.id} value={product.id}>
                                 {product.name}
                               </option>
