@@ -12,6 +12,7 @@ frontend:
       commands:
         - rm -rf node_modules package-lock.json
         - npm install --legacy-peer-deps
+        - cp amplify_outputs.json src/amplify_outputs.json
     build:
       commands:
         - npm run build

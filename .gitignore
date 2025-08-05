@@ -46,3 +46,7 @@ Thumbs.db
 # Temporary folders
 tmp/
 temp/
+
+# Amplify generated files
+amplify_outputs.json
+src/amplify_outputs.json
