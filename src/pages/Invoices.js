@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, Calendar, DollarSign } from 'lucide-react';
-import { useBilling } from '../context/BillingContext';
+import { useBilling } from '../context/AmplifyBillingContext';
 import { format } from 'date-fns';
 
 const Invoices = () => {
-  const { state, dispatch } = useBilling();
-  const { invoices, customers, products } = state;
+  const { state, api } = useBilling();
+  const { invoices, customers, products, loading } = state;
   const [showModal, setShowModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -98,7 +98,7 @@ const Invoices = () => {
     setFormData({ ...formData, items: newItems });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     const total = calculateTotal(formData.items);
@@ -107,25 +107,22 @@ const Invoices = () => {
       total,
       subtotal: total,
       tax: 0, // Can be enhanced later
+      status: editingInvoice ? editingInvoice.status : 'draft'
     };
 
-    if (editingInvoice) {
-      dispatch({
-        type: 'UPDATE_INVOICE',
-        payload: { ...invoiceData, id: editingInvoice.id }
-      });
-    } else {
-      const newInvoice = {
-        ...invoiceData,
-        id: Date.now(),
-        createdAt: new Date().toISOString(),
-        status: 'draft'
-      };
-      dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
+    try {
+      if (editingInvoice) {
+        await api.invoices.update(editingInvoice.id, invoiceData);
+      } else {
+        await api.invoices.create(invoiceData);
+      }
+      
+      resetForm();
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      alert('Failed to save invoice. Please try again.');
     }
-    
-    resetForm();
-    setShowModal(false);
   };
 
   const handleEdit = (invoice) => {
@@ -134,9 +131,14 @@ const Invoices = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (invoiceId) => {
+  const handleDelete = async (invoiceId) => {
     if (window.confirm('Are you sure you want to delete this invoice?')) {
-      dispatch({ type: 'DELETE_INVOICE', payload: invoiceId });
+      try {
+        await api.invoices.delete(invoiceId);
+      } catch (error) {
+        console.error('Error deleting invoice:', error);
+        alert('Failed to delete invoice. Please try again.');
+      }
     }
   };
 

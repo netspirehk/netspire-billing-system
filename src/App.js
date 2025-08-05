@@ -1,10 +1,29 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Amplify } from 'aws-amplify';
-import { Authenticator } from '@aws-amplify/ui-react';
-import '@aws-amplify/ui-react/styles.css';
+
+// Import Amplify configuration - MUST be done before any other Amplify imports
+try {
+  // Try multiple possible locations for the amplify_outputs.json file
+  let outputs;
+  try {
+    outputs = require('./amplify_outputs.json');
+  } catch {
+    try {
+      outputs = require('../amplify_outputs.json');
+    } catch {
+      outputs = require('./aws-exports.js').default;
+    }
+  }
+  Amplify.configure(outputs);
+  console.log('✅ Amplify configured successfully');
+} catch (error) {
+  console.error('❌ Failed to configure Amplify:', error);
+  console.warn('Please ensure amplify_outputs.json is in the src/ directory or project root');
+}
 
 import Layout from './components/Layout/Layout';
+import Login from './components/Login/Login';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import Invoices from './pages/Invoices';
@@ -12,100 +31,53 @@ import Products from './pages/Products';
 import Payments from './pages/Payments';
 import Reports from './pages/Reports';
 import { BillingProvider } from './context/AmplifyBillingContext';
-import outputs from './amplify_outputs.json';
+import { AuthProvider, useAuth } from './context/SimpleAuthContext';
 
-// Configure Amplify
-Amplify.configure(outputs);
+// Main App component with authentication
+const AppContent = () => {
+  const { isAuthenticated, user, logout, loading } = useAuth();
 
-// Custom Authenticator theme for your billing system
-const theme = {
-  name: 'netspire-theme',
-  tokens: {
-    colors: {
-      brand: {
-        primary: {
-          10: '#f0f9ff',
-          20: '#e0f2fe',
-          40: '#0ea5e9',
-          60: '#0284c7',
-          80: '#0369a1',
-          90: '#0c4a6e',
-          100: '#082f49',
-        },
-      },
-    },
-    components: {
-      authenticator: {
-        router: {
-          borderWidth: '0',
-          backgroundColor: 'var(--amplify-colors-background-secondary)',
-        },
-        form: {
-          padding: '2rem',
-        },
-      },
-      button: {
-        primary: {
-          backgroundColor: 'var(--amplify-colors-brand-primary-80)',
-        },
-      },
-      fieldcontrol: {
-        borderRadius: '8px',
-      },
-    },
-  },
-};
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        fontSize: '18px'
+      }}>
+        Loading...
+      </div>
+    );
+  }
 
-// Custom form fields for sign up
-const formFields = {
-  signUp: {
-    name: {
-      label: 'Full Name',
-      placeholder: 'Enter your full name',
-      isRequired: true,
-      order: 1,
-    },
-    email: {
-      label: 'Email',
-      placeholder: 'Enter your email address',
-      isRequired: true,
-      order: 2,
-    },
-    password: {
-      label: 'Password',
-      placeholder: 'Enter your password',
-      isRequired: true,
-      order: 3,
-    },
-    confirm_password: {
-      label: 'Confirm Password',
-      placeholder: 'Confirm your password',
-      isRequired: true,
-      order: 4,
-    },
-  },
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
+  return (
+    <BillingProvider>
+      <Router>
+        <Layout user={user} onLogout={logout}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/customers" element={<Customers />} />
+            <Route path="/invoices" element={<Invoices />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/payments" element={<Payments />} />
+            <Route path="/reports" element={<Reports />} />
+          </Routes>
+        </Layout>
+      </Router>
+    </BillingProvider>
+  );
 };
 
 function App() {
   return (
-    <Authenticator theme={theme} formFields={formFields}>
-      {({ signOut, user }) => (
-        <BillingProvider>
-          <Router>
-            <Layout signOut={signOut} user={user}>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/customers" element={<Customers />} />
-                <Route path="/invoices" element={<Invoices />} />
-                <Route path="/products" element={<Products />} />
-                <Route path="/payments" element={<Payments />} />
-                <Route path="/reports" element={<Reports />} />
-              </Routes>
-            </Layout>
-          </Router>
-        </BillingProvider>
-      )}
-    </Authenticator>
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

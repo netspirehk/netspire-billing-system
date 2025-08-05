@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, CreditCard, Calendar, DollarSign, FileText, User } from 'lucide-react';
-import { useBilling } from '../context/BillingContext';
+import { useBilling } from '../context/AmplifyBillingContext';
 import { format } from 'date-fns';
 
 const Payments = () => {
-  const { state, dispatch } = useBilling();
-  const { payments, invoices, customers } = state;
+  const { state, api } = useBilling();
+  const { payments, invoices, customers, loading } = state;
   const [showModal, setShowModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,7 +66,7 @@ const Payments = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     const paymentData = {
@@ -75,34 +75,19 @@ const Payments = () => {
       amount: parseFloat(formData.amount)
     };
 
-    if (editingPayment) {
-      dispatch({
-        type: 'UPDATE_PAYMENT',
-        payload: { ...paymentData, id: editingPayment.id }
-      });
-    } else {
-      dispatch({
-        type: 'ADD_PAYMENT',
-        payload: paymentData
-      });
-    }
-
-    // Update invoice status if fully paid
-    const invoice = getInvoiceInfo(paymentData.invoiceId);
-    if (invoice) {
-      const totalPaid = payments
-        .filter(p => p.invoiceId === paymentData.invoiceId)
-        .reduce((sum, p) => sum + p.amount, 0) + paymentData.amount;
-      
-      if (totalPaid >= invoice.total) {
-        dispatch({
-          type: 'UPDATE_INVOICE',
-          payload: { ...invoice, status: 'paid' }
-        });
+    try {
+      if (editingPayment) {
+        await api.payments.update(editingPayment.id, paymentData);
+      } else {
+        // The API automatically handles invoice status updates
+        await api.payments.create(paymentData);
       }
-    }
 
-    resetForm();
+      resetForm();
+    } catch (error) {
+      console.error('Error saving payment:', error);
+      alert('Failed to save payment. Please try again.');
+    }
   };
 
   const handleEdit = (payment) => {
@@ -118,12 +103,14 @@ const Payments = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (paymentId) => {
+  const handleDelete = async (paymentId) => {
     if (window.confirm('Are you sure you want to delete this payment?')) {
-      dispatch({
-        type: 'DELETE_PAYMENT',
-        payload: paymentId
-      });
+      try {
+        await api.payments.delete(paymentId);
+      } catch (error) {
+        console.error('Error deleting payment:', error);
+        alert('Failed to delete payment. Please try again.');
+      }
     }
   };
 

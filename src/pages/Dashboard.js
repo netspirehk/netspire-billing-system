@@ -1,11 +1,15 @@
 import React from 'react';
 import { DollarSign, Users, FileText, AlertCircle } from 'lucide-react';
-import { useBilling } from '../context/BillingContext';
+import { useBilling } from '../context/AmplifyBillingContext';
 import { format } from 'date-fns';
 
 const Dashboard = () => {
   const { state } = useBilling();
   const { customers, invoices, payments, products } = state;
+  
+  // Debug logging to check data availability
+  console.log('Dashboard data:', { customers, invoices, payments, products });
+  console.log('State:', state);
 
   // Helper functions
   const getTotalRevenue = () => {

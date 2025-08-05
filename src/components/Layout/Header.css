@@ -68,7 +68,23 @@
   color: #374151;
 }
 
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .user-btn {
   padding: 8px 12px;
   font-weight: 500;
+}
+
+.logout-btn {
+  color: #dc2626;
+  padding: 8px;
+}
+
+.logout-btn:hover {
+  background-color: #fef2f2;
+  color: #b91c1c;
 }

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, Package, DollarSign, Tag, Percent } from 'lucide-react';
-import { useBilling } from '../context/BillingContext';
+import { useBilling } from '../context/AmplifyBillingContext';
 
 const Products = () => {
-  const { state, dispatch } = useBilling();
-  const { products } = state;
+  const { state, api } = useBilling();
+  const { products, loading } = state;
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,7 +42,7 @@ const Products = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     const productData = {
@@ -51,19 +51,17 @@ const Products = () => {
       taxRate: parseFloat(formData.taxRate)
     };
 
-    if (editingProduct) {
-      dispatch({
-        type: 'UPDATE_PRODUCT',
-        payload: { ...productData, id: editingProduct.id }
-      });
-    } else {
-      dispatch({
-        type: 'ADD_PRODUCT',
-        payload: productData
-      });
+    try {
+      if (editingProduct) {
+        await api.products.update(editingProduct.id, productData);
+      } else {
+        await api.products.create(productData);
+      }
+      resetForm();
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Failed to save product. Please try again.');
     }
-
-    resetForm();
   };
 
   const handleEdit = (product) => {
@@ -78,12 +76,14 @@ const Products = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (productId) => {
+  const handleDelete = async (productId) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
-      dispatch({
-        type: 'DELETE_PRODUCT',
-        payload: productId
-      });
+      try {
+        await api.products.delete(productId);
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Failed to delete product. Please try again.');
+      }
     }
   };
 

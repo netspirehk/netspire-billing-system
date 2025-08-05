@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BarChart3, TrendingUp, Download, Calendar } from 'lucide-react';
-import { useBilling } from '../context/BillingContext';
+import { useBilling } from '../context/AmplifyBillingContext';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 const Reports = () => {

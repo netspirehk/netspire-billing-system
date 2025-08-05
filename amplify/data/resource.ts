@@ -23,6 +23,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
       allow.groups(['viewer']).to(['read']),
     ]),
@@ -45,6 +46,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
       allow.groups(['viewer']).to(['read']),
     ]),
@@ -76,6 +78,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
       allow.groups(['viewer']).to(['read']),
     ]),
@@ -97,6 +100,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
       allow.groups(['viewer']).to(['read']),
     ]),
@@ -119,6 +123,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
       allow.groups(['viewer']).to(['read']),
     ]),
@@ -137,6 +142,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin', 'billing']).to(['create', 'update', 'delete']),
       allow.groups(['viewer']).to(['read']),
     ]),
@@ -153,6 +159,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin']).to(['create', 'update', 'delete']),
       allow.groups(['billing', 'viewer']).to(['read']),
     ]),
@@ -168,6 +175,7 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.authenticated(),
+      allow.publicApiKey(), // Allow API key access for testing
       allow.groups(['admin']).to(['create', 'read']),
     ]),
 });
@@ -177,6 +185,10 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'userPool',
+    defaultAuthorizationMode: 'apiKey', // Use API key for testing with SimpleAuth
+    apiKeyAuthorizationMode: {
+      expiresInDays: 30,
+    },
   },
 });
+

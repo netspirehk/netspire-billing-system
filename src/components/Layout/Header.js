@@ -1,8 +1,8 @@
 import React from 'react';
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, LogOut } from 'lucide-react';
 import './Header.css';
 
-const Header = () => {
+const Header = ({ user, onLogout }) => {
   return (
     <header className="header">
       <div className="header-left">
@@ -19,10 +19,15 @@ const Header = () => {
         <button className="header-btn">
           <Bell size={20} />
         </button>
-        <button className="header-btn user-btn">
-          <User size={20} />
-          <span>Admin</span>
-        </button>
+        <div className="user-info">
+          <button className="header-btn user-btn">
+            <User size={20} />
+            <span>{user?.name || 'Admin'}</span>
+          </button>
+          <button className="header-btn logout-btn" onClick={onLogout} title="Logout">
+            <LogOut size={20} />
+          </button>
+        </div>
       </div>
     </header>
   );

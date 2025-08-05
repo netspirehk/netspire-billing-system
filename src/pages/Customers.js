@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, Mail, Phone, MapPin, Hash } from 'lucide-react';
-import { useBilling } from '../context/BillingContext';
+import { useBilling } from '../context/AmplifyBillingContext';
 import { format } from 'date-fns';
 
 const Customers = () => {
-  const { state, dispatch } = useBilling();
-  const { customers } = state;
+  const { state, api } = useBilling();
+  const { customers, loading } = state;
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,27 +32,20 @@ const Customers = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const customerData = {
-      ...formData,
-      createdAt: editingCustomer ? editingCustomer.createdAt : new Date().toISOString().split('T')[0]
-    };
-
-    if (editingCustomer) {
-      dispatch({
-        type: 'UPDATE_CUSTOMER',
-        payload: { ...customerData, id: editingCustomer.id }
-      });
-    } else {
-      dispatch({
-        type: 'ADD_CUSTOMER',
-        payload: customerData
-      });
+    try {
+      if (editingCustomer) {
+        await api.customers.update(editingCustomer.id, formData);
+      } else {
+        await api.customers.create(formData);
+      }
+      resetForm();
+    } catch (error) {
+      console.error('Error saving customer:', error);
+      alert('Failed to save customer. Please try again.');
     }
-
-    resetForm();
   };
 
   const handleEdit = (customer) => {
@@ -67,12 +60,14 @@ const Customers = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (customerId) => {
+  const handleDelete = async (customerId) => {
     if (window.confirm('Are you sure you want to delete this customer?')) {
-      dispatch({
-        type: 'DELETE_CUSTOMER',
-        payload: customerId
-      });
+      try {
+        await api.customers.delete(customerId);
+      } catch (error) {
+        console.error('Error deleting customer:', error);
+        alert('Failed to delete customer. Please try again.');
+      }
     }
   };
 

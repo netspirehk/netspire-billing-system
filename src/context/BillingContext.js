@@ -2,8 +2,12 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 
 const BillingContext = createContext();
 
-// Initial state
+// Initial state with sample data
 const initialState = {
+  loading: false,
+  error: null,
+  user: null,
+  userGroups: ['admin'],
   customers: [
     {
       id: 1,
@@ -96,13 +100,36 @@ const initialState = {
   ]
 };
 
-// Reducer function
+// Enhanced reducer with loading and error states
 function billingReducer(state, action) {
   switch (action.type) {
+    case 'SET_LOADING':
+      return { ...state, loading: action.payload };
+    
+    case 'SET_ERROR':
+      return { ...state, error: action.payload, loading: false };
+    
+    case 'SET_USER':
+      return { ...state, user: action.payload.user, userGroups: action.payload.groups };
+
+    // Data loading actions
+    case 'SET_CUSTOMERS':
+      return { ...state, customers: action.payload, loading: false };
+    
+    case 'SET_PRODUCTS':
+      return { ...state, products: action.payload, loading: false };
+    
+    case 'SET_INVOICES':
+      return { ...state, invoices: action.payload, loading: false };
+    
+    case 'SET_PAYMENTS':
+      return { ...state, payments: action.payload, loading: false };
+
+    // Customer actions
     case 'ADD_CUSTOMER':
       return {
         ...state,
-        customers: [...state.customers, { ...action.payload, id: Date.now() }]
+        customers: [...state.customers, action.payload]
       };
     
     case 'UPDATE_CUSTOMER':
@@ -122,7 +149,7 @@ function billingReducer(state, action) {
     case 'ADD_PRODUCT':
       return {
         ...state,
-        products: [...state.products, { ...action.payload, id: Date.now() }]
+        products: [...state.products, action.payload]
       };
     
     case 'UPDATE_PRODUCT':
@@ -142,7 +169,7 @@ function billingReducer(state, action) {
     case 'ADD_INVOICE':
       return {
         ...state,
-        invoices: [...state.invoices, { ...action.payload, id: Date.now() }]
+        invoices: [...state.invoices, action.payload]
       };
     
     case 'UPDATE_INVOICE':
@@ -162,7 +189,7 @@ function billingReducer(state, action) {
     case 'ADD_PAYMENT':
       return {
         ...state,
-        payments: [...state.payments, { ...action.payload, id: Date.now() }]
+        payments: [...state.payments, action.payload]
       };
     
     case 'UPDATE_PAYMENT':
@@ -193,20 +220,283 @@ export function BillingProvider({ children }) {
     if (savedData) {
       try {
         const parsedData = JSON.parse(savedData);
-        // You could dispatch actions to restore state here
+        dispatch({ type: 'SET_CUSTOMERS', payload: parsedData.customers || initialState.customers });
+        dispatch({ type: 'SET_PRODUCTS', payload: parsedData.products || initialState.products });
+        dispatch({ type: 'SET_INVOICES', payload: parsedData.invoices || initialState.invoices });
+        dispatch({ type: 'SET_PAYMENTS', payload: parsedData.payments || initialState.payments });
       } catch (error) {
         console.error('Error loading saved data:', error);
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to load saved data' });
       }
+    } else {
+      // First time loading - use initial state data
+      console.log('Loading initial data:', initialState);
+      dispatch({ type: 'SET_CUSTOMERS', payload: initialState.customers });
+      dispatch({ type: 'SET_PRODUCTS', payload: initialState.products });
+      dispatch({ type: 'SET_INVOICES', payload: initialState.invoices });
+      dispatch({ type: 'SET_PAYMENTS', payload: initialState.payments });
     }
   }, []);
 
   // Save data to localStorage whenever state changes
   useEffect(() => {
-    localStorage.setItem('billingSystemData', JSON.stringify(state));
+    const { loading, error, user, userGroups, ...dataToSave } = state;
+    localStorage.setItem('billingSystemData', JSON.stringify(dataToSave));
   }, [state]);
 
+  // Generate unique ID
+  const generateId = () => {
+    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  };
+
+  // Enhanced API functions similar to AmplifyBillingContext
+  const api = {
+    // Customer operations
+    customers: {
+      create: async (customerData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const newCustomer = {
+            ...customerData,
+            id: generateId(),
+            createdAt: new Date().toISOString().split('T')[0]
+          };
+          
+          dispatch({ type: 'ADD_CUSTOMER', payload: newCustomer });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return newCustomer;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      update: async (id, customerData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const updatedCustomer = { ...customerData, id };
+          dispatch({ type: 'UPDATE_CUSTOMER', payload: updatedCustomer });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return updatedCustomer;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      delete: async (id) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          dispatch({ type: 'DELETE_CUSTOMER', payload: id });
+          dispatch({ type: 'SET_LOADING', payload: false });
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      }
+    },
+
+    // Product operations
+    products: {
+      create: async (productData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const newProduct = {
+            ...productData,
+            id: generateId()
+          };
+          
+          dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return newProduct;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      update: async (id, productData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const updatedProduct = { ...productData, id };
+          dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return updatedProduct;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      delete: async (id) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          dispatch({ type: 'DELETE_PRODUCT', payload: id });
+          dispatch({ type: 'SET_LOADING', payload: false });
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      }
+    },
+
+    // Invoice operations
+    invoices: {
+      create: async (invoiceData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const newInvoice = {
+            ...invoiceData,
+            id: generateId(),
+            invoiceNumber: `INV-${new Date().getFullYear()}-${String(state.invoices.length + 1).padStart(3, '0')}`,
+            issueDate: new Date().toISOString().split('T')[0]
+          };
+          
+          dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return newInvoice;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      update: async (id, invoiceData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const updatedInvoice = { ...invoiceData, id };
+          dispatch({ type: 'UPDATE_INVOICE', payload: updatedInvoice });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return updatedInvoice;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      delete: async (id) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          dispatch({ type: 'DELETE_INVOICE', payload: id });
+          dispatch({ type: 'SET_LOADING', payload: false });
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+
+      // Send invoice via email (simulated)
+      send: async (invoiceId) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          // Simulate email sending delay
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const updatedInvoice = {
+            ...state.invoices.find(inv => inv.id === invoiceId),
+            status: 'sent',
+            sentAt: new Date().toISOString()
+          };
+          
+          dispatch({ type: 'UPDATE_INVOICE', payload: updatedInvoice });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return updatedInvoice;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      }
+    },
+
+    // Payment operations
+    payments: {
+      create: async (paymentData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const newPayment = {
+            ...paymentData,
+            id: generateId(),
+            paymentDate: paymentData.paymentDate || new Date().toISOString().split('T')[0]
+          };
+          
+          dispatch({ type: 'ADD_PAYMENT', payload: newPayment });
+          
+          // Update invoice status if fully paid
+          const invoice = state.invoices.find(inv => inv.id === paymentData.invoiceId);
+          if (invoice) {
+            const totalPaid = state.payments
+              .filter(p => p.invoiceId === paymentData.invoiceId)
+              .reduce((sum, p) => sum + p.amount, 0) + paymentData.amount;
+            
+            if (totalPaid >= invoice.total) {
+              const updatedInvoice = { ...invoice, status: 'paid' };
+              dispatch({ type: 'UPDATE_INVOICE', payload: updatedInvoice });
+            }
+          }
+          
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return newPayment;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      update: async (id, paymentData) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          
+          const updatedPayment = { ...paymentData, id };
+          dispatch({ type: 'UPDATE_PAYMENT', payload: updatedPayment });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return updatedPayment;
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      },
+      
+      delete: async (id) => {
+        try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          dispatch({ type: 'DELETE_PAYMENT', payload: id });
+          dispatch({ type: 'SET_LOADING', payload: false });
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+          throw error;
+        }
+      }
+    },
+
+    // Utility functions
+    refresh: async () => {
+      // For local storage, just reload from localStorage
+      const savedData = localStorage.getItem('billingSystemData');
+      if (savedData) {
+        try {
+          const parsedData = JSON.parse(savedData);
+          dispatch({ type: 'SET_CUSTOMERS', payload: parsedData.customers || [] });
+          dispatch({ type: 'SET_PRODUCTS', payload: parsedData.products || [] });
+          dispatch({ type: 'SET_INVOICES', payload: parsedData.invoices || [] });
+          dispatch({ type: 'SET_PAYMENTS', payload: parsedData.payments || [] });
+        } catch (error) {
+          dispatch({ type: 'SET_ERROR', payload: 'Failed to refresh data' });
+        }
+      }
+    },
+    clearError: () => dispatch({ type: 'SET_ERROR', payload: null })
+  };
+
   return (
-    <BillingContext.Provider value={{ state, dispatch }}>
+    <BillingContext.Provider value={{ state, dispatch, api }}>
       {children}
     </BillingContext.Provider>
   );
@@ -218,4 +508,19 @@ export function useBilling() {
     throw new Error('useBilling must be used within a BillingProvider');
   }
   return context;
+}
+
+// Permission helpers (compatible with the old AmplifyBillingContext)
+export function usePermissions() {
+  const { state } = useBilling();
+  
+  return {
+    canCreate: state.userGroups.includes('admin') || state.userGroups.includes('billing'),
+    canEdit: state.userGroups.includes('admin') || state.userGroups.includes('billing'),
+    canDelete: state.userGroups.includes('admin'),
+    canViewReports: state.userGroups.includes('admin') || state.userGroups.includes('billing'),
+    isAdmin: state.userGroups.includes('admin'),
+    isBilling: state.userGroups.includes('billing'),
+    isViewer: state.userGroups.includes('viewer'),
+  };
 }
