@@ -5,7 +5,12 @@ import { format } from 'date-fns';
 
 const Dashboard = () => {
   const { state } = useBilling();
-  const { customers, invoices, payments, products } = state;
+  const { customers: rawCustomers, invoices: rawInvoices, payments: rawPayments, products } = state;
+  
+  // Ensure arrays are safe with valid objects
+  const customers = (rawCustomers || []).filter(c => c && c.id && c.name);
+  const invoices = (rawInvoices || []).filter(inv => inv && inv.customerId && inv.invoiceNumber);
+  const payments = (rawPayments || []).filter(p => p && p.invoiceId && typeof p.amount === 'number');
   
   // Debug logging to check data availability
   console.log('Dashboard data:', { customers, invoices, payments, products });
@@ -13,25 +18,29 @@ const Dashboard = () => {
 
   // Helper functions
   const getTotalRevenue = () => {
-    return payments.reduce((sum, payment) => sum + payment.amount, 0);
+    return payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
   };
 
   const getTotalOutstanding = () => {
     return invoices.reduce((sum, invoice) => {
+      if (!invoice || typeof invoice.total !== 'number') return sum;
+      
       const paidAmount = payments
-        .filter(payment => payment.invoiceId === invoice.id)
-        .reduce((paidSum, payment) => paidSum + payment.amount, 0);
+        .filter(payment => payment && payment.invoiceId === invoice.id)
+        .reduce((paidSum, payment) => paidSum + (payment.amount || 0), 0);
       return sum + Math.max(0, invoice.total - paidAmount);
     }, 0);
   };
   
   const getOverdueInvoices = () => {
     return invoices.filter(invoice => {
+      if (!invoice || !invoice.dueDate || typeof invoice.total !== 'number') return false;
+      
       const dueDate = new Date(invoice.dueDate);
       const today = new Date();
       const paidAmount = payments
-        .filter(payment => payment.invoiceId === invoice.id)
-        .reduce((sum, payment) => sum + payment.amount, 0);
+        .filter(payment => payment && payment.invoiceId === invoice.id)
+        .reduce((sum, payment) => sum + (payment.amount || 0), 0);
       return dueDate < today && paidAmount < invoice.total;
     });
   };
@@ -43,11 +52,13 @@ const Dashboard = () => {
   };
 
   const getCustomerInfo = (customerId) => {
-    return customers.find(c => c.id === customerId);
+    if (!customerId) return null;
+    return customers.find(c => c && c.id === customerId);
   };
 
   const getInvoiceInfo = (invoiceId) => {
-    return invoices.find(inv => inv.id === invoiceId);
+    if (!invoiceId) return null;
+    return invoices.find(inv => inv && inv.id === invoiceId);
   };
 
   const totalRevenue = getTotalRevenue();
@@ -135,7 +146,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentPayments.map((payment) => {
+                  {recentPayments.filter(payment => payment && payment.id).map((payment) => {
                     const invoiceInfo = getInvoiceInfo(payment.invoiceId);
                     const customerInfo = invoiceInfo ? getCustomerInfo(invoiceInfo.customerId) : null;
                     
@@ -144,9 +155,9 @@ const Dashboard = () => {
                         <td>#{String(payment.id).slice(0, 8)}</td>
                         <td>{invoiceInfo ? invoiceInfo.invoiceNumber : 'Unknown'}</td>
                         <td>{customerInfo ? customerInfo.name : 'Unknown Customer'}</td>
-                        <td style={{ fontWeight: '600', color: '#059669' }}>${payment.amount.toFixed(2)}</td>
-                        <td>{format(new Date(payment.paymentDate), 'MMM dd, yyyy')}</td>
-                        <td>{payment.method}</td>
+                        <td style={{ fontWeight: '600', color: '#059669' }}>${(payment.amount || 0).toFixed(2)}</td>
+                        <td>{payment.paymentDate ? format(new Date(payment.paymentDate), 'MMM dd, yyyy') : 'Unknown'}</td>
+                        <td>{payment.method || 'Unknown'}</td>
                       </tr>
                     );
                   })}

@@ -34,7 +34,7 @@ function billingReducer(state, action) {
 
     // Customer actions
     case 'SET_CUSTOMERS':
-      return { ...state, customers: action.payload, loading: false };
+      return { ...state, customers: (action.payload || []).filter(c => c && c.id && c.name), loading: false };
     
     case 'ADD_CUSTOMER':
       return { ...state, customers: [...state.customers, action.payload] };
@@ -76,10 +76,13 @@ function billingReducer(state, action) {
 
     // Invoice actions
     case 'SET_INVOICES':
-      return { ...state, invoices: action.payload, loading: false };
+      return { ...state, invoices: (action.payload || []).filter(inv => inv && inv.customerId && inv.invoiceNumber), loading: false };
     
     case 'ADD_INVOICE':
-      return { ...state, invoices: [...state.invoices, action.payload] };
+      return { 
+        ...state, 
+        invoices: [...state.invoices, action.payload].filter(inv => inv && inv.customerId && inv.invoiceNumber)
+      };
     
     case 'UPDATE_INVOICE':
       return {
@@ -97,10 +100,13 @@ function billingReducer(state, action) {
 
     // Payment actions
     case 'SET_PAYMENTS':
-      return { ...state, payments: action.payload, loading: false };
+      return { ...state, payments: (action.payload || []).filter(pay => pay && pay.invoiceId), loading: false };
     
     case 'ADD_PAYMENT':
-      return { ...state, payments: [...state.payments, action.payload] };
+      return { 
+        ...state, 
+        payments: [...state.payments, action.payload].filter(pay => pay && pay.invoiceId)
+      };
     
     case 'UPDATE_PAYMENT':
       return {
@@ -147,17 +153,39 @@ export function BillingProvider({ children }) {
     
     try {
       // Load all data in parallel
-      const [customersResult, productsResult, invoicesResult, paymentsResult] = await Promise.all([
+      const [customersResult, productsResult, invoicesResult, paymentsResult, invoiceItemsResult] = await Promise.all([
         client.models.Customer.list(),
         client.models.Product.list(),
         client.models.Invoice.list(),
-        client.models.Payment.list()
+        client.models.Payment.list(),
+        client.models.InvoiceItem.list()
       ]);
 
-      dispatch({ type: 'SET_CUSTOMERS', payload: customersResult.data || [] });
+      // Combine invoices with their items
+      const invoices = (invoicesResult.data || []).filter(inv => inv && inv.customerId && inv.invoiceNumber);
+      const invoiceItems = invoiceItemsResult.data || [];
+      
+      // Group items by invoice ID
+      const itemsByInvoiceId = {};
+      invoiceItems.forEach(item => {
+        if (item && item.invoiceId) {
+          if (!itemsByInvoiceId[item.invoiceId]) {
+            itemsByInvoiceId[item.invoiceId] = [];
+          }
+          itemsByInvoiceId[item.invoiceId].push(item);
+        }
+      });
+      
+      // Attach items to invoices
+      const invoicesWithItems = invoices.map(invoice => ({
+        ...invoice,
+        items: itemsByInvoiceId[invoice.id] || []
+      }));
+
+      dispatch({ type: 'SET_CUSTOMERS', payload: (customersResult.data || []).filter(c => c && c.id && c.name) });
       dispatch({ type: 'SET_PRODUCTS', payload: (productsResult.data || []).filter(p => p && p.name) });
-      dispatch({ type: 'SET_INVOICES', payload: invoicesResult.data || [] });
-      dispatch({ type: 'SET_PAYMENTS', payload: paymentsResult.data || [] });
+      dispatch({ type: 'SET_INVOICES', payload: invoicesWithItems });
+      dispatch({ type: 'SET_PAYMENTS', payload: (paymentsResult.data || []).filter(pay => pay && pay.invoiceId) });
       
     } catch (error) {
       console.error('Error loading data:', error);
@@ -263,37 +291,155 @@ export function BillingProvider({ children }) {
 
     // Invoice operations
     invoices: {
-      create: async (invoiceData) => {
+      create: async (invoiceData, items = []) => {
         try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Creating invoice:', invoiceData);
+          
+          // Create the invoice first
+          const invoiceResult = await client.models.Invoice.create(invoiceData);
+          console.log('Invoice created:', invoiceResult);
+          
+          if (!invoiceResult.data) {
+            throw new Error('Failed to create invoice');
+          }
 
-          const result = await client.models.Invoice.create(invoiceData);
-          dispatch({ type: 'ADD_INVOICE', payload: result.data });
-          return result.data;
+          const createdInvoice = invoiceResult.data;
+          
+          // Create invoice items if provided
+          const createdItems = [];
+          if (items && items.length > 0) {
+            console.log('Creating invoice items:', items);
+            
+            for (const item of items) {
+              const itemData = {
+                invoiceId: createdInvoice.id,
+                productId: item.productId || null,
+                description: item.description || '',
+                quantity: parseFloat(item.quantity) || 1,
+                rate: parseFloat(item.rate) || 0,
+                amount: (parseFloat(item.quantity) || 1) * (parseFloat(item.rate) || 0),
+                taxRate: 0
+              };
+              
+              const itemResult = await client.models.InvoiceItem.create(itemData);
+              if (itemResult.data) {
+                createdItems.push(itemResult.data);
+              }
+            }
+          }
+          
+          // Combine invoice with items for state
+          const completeInvoice = {
+            ...createdInvoice,
+            items: createdItems
+          };
+          
+          dispatch({ type: 'ADD_INVOICE', payload: completeInvoice });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return completeInvoice;
         } catch (error) {
+          console.error('Invoice creation error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       },
       
-      update: async (id, invoiceData) => {
+      update: async (id, invoiceData, items = []) => {
         try {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Updating invoice:', id, invoiceData);
+          
+          // Update the invoice
+          const invoiceResult = await client.models.Invoice.update({ id, ...invoiceData });
+          console.log('Invoice updated:', invoiceResult);
+          
+          if (!invoiceResult.data) {
+            throw new Error('Failed to update invoice');
+          }
 
-          const result = await client.models.Invoice.update({ id, ...invoiceData });
-          dispatch({ type: 'UPDATE_INVOICE', payload: result.data });
-          return result.data;
+          // Handle items update (delete existing and recreate)
+          // Note: This is a simplified approach. In production, you might want more sophisticated item management
+          const updatedItems = [];
+          if (items && items.length > 0) {
+            console.log('Updating invoice items:', items);
+            
+            // Delete existing items (simplified approach)
+            try {
+              const existingItems = await client.models.InvoiceItem.list({
+                filter: { invoiceId: { eq: id } }
+              });
+              
+              for (const existingItem of existingItems.data || []) {
+                await client.models.InvoiceItem.delete({ id: existingItem.id });
+              }
+            } catch (deleteError) {
+              console.warn('Error deleting existing items:', deleteError);
+            }
+            
+            // Create new items
+            for (const item of items) {
+              const itemData = {
+                invoiceId: id,
+                productId: item.productId || null,
+                description: item.description || '',
+                quantity: parseFloat(item.quantity) || 1,
+                rate: parseFloat(item.rate) || 0,
+                amount: (parseFloat(item.quantity) || 1) * (parseFloat(item.rate) || 0),
+                taxRate: 0
+              };
+              
+              const itemResult = await client.models.InvoiceItem.create(itemData);
+              if (itemResult.data) {
+                updatedItems.push(itemResult.data);
+              }
+            }
+          }
+          
+          // Combine invoice with items for state
+          const completeInvoice = {
+            ...invoiceResult.data,
+            items: updatedItems
+          };
+          
+          dispatch({ type: 'UPDATE_INVOICE', payload: completeInvoice });
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return completeInvoice;
         } catch (error) {
+          console.error('Invoice update error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       },
       
       delete: async (id) => {
         try {
-
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Deleting invoice:', id);
+          
+          // Delete invoice items first
+          try {
+            const existingItems = await client.models.InvoiceItem.list({
+              filter: { invoiceId: { eq: id } }
+            });
+            
+            for (const item of existingItems.data || []) {
+              await client.models.InvoiceItem.delete({ id: item.id });
+            }
+          } catch (deleteItemsError) {
+            console.warn('Error deleting invoice items:', deleteItemsError);
+          }
+          
+          // Delete the invoice
           await client.models.Invoice.delete({ id });
           dispatch({ type: 'DELETE_INVOICE', payload: id });
+          dispatch({ type: 'SET_LOADING', payload: false });
         } catch (error) {
+          console.error('Invoice delete error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       },
@@ -321,48 +467,77 @@ export function BillingProvider({ children }) {
     payments: {
       create: async (paymentData) => {
         try {
-
-          const result = await client.models.Payment.create(paymentData);
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Creating payment:', paymentData);
+          
+          // Ensure status is set (default to completed for manual entries)
+          const enhancedPaymentData = {
+            ...paymentData,
+            status: paymentData.status || 'completed'
+          };
+          
+          const result = await client.models.Payment.create(enhancedPaymentData);
+          console.log('Payment created:', result);
+          
+          if (!result.data) {
+            throw new Error('Failed to create payment');
+          }
+          
           dispatch({ type: 'ADD_PAYMENT', payload: result.data });
           
           // Update invoice status if fully paid
           const invoice = state.invoices.find(inv => inv.id === paymentData.invoiceId);
           if (invoice) {
             const totalPaid = state.payments
-              .filter(p => p.invoiceId === paymentData.invoiceId)
-              .reduce((sum, p) => sum + p.amount, 0) + paymentData.amount;
+              .filter(p => p && p.invoiceId === paymentData.invoiceId)
+              .reduce((sum, p) => sum + (p.amount || 0), 0) + (paymentData.amount || 0);
             
             if (totalPaid >= invoice.total) {
               api.invoices.update(invoice.id, { status: 'paid' });
             }
           }
           
+          dispatch({ type: 'SET_LOADING', payload: false });
           return result.data;
         } catch (error) {
+          console.error('Payment creation error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       },
       
       update: async (id, paymentData) => {
         try {
-
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Updating payment:', id, paymentData);
+          
           const result = await client.models.Payment.update({ id, ...paymentData });
+          console.log('Payment updated:', result);
+          
           dispatch({ type: 'UPDATE_PAYMENT', payload: result.data });
+          dispatch({ type: 'SET_LOADING', payload: false });
           return result.data;
         } catch (error) {
+          console.error('Payment update error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       },
       
       delete: async (id) => {
         try {
-
+          dispatch({ type: 'SET_LOADING', payload: true });
+          console.log('Deleting payment:', id);
+          
           await client.models.Payment.delete({ id });
           dispatch({ type: 'DELETE_PAYMENT', payload: id });
+          dispatch({ type: 'SET_LOADING', payload: false });
         } catch (error) {
+          console.error('Payment delete error:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ type: 'SET_LOADING', payload: false });
           throw error;
         }
       }

@@ -5,10 +5,12 @@ import { format } from 'date-fns';
 
 const Invoices = () => {
   const { state, api } = useBilling();
-  const { invoices, customers, products: rawProducts, loading } = state;
+  const { invoices: rawInvoices, customers: rawCustomers, products: rawProducts, loading, error } = state;
   
-  // Ensure products is always a safe array with valid objects
+  // Ensure all arrays are safe with valid objects
   const products = (rawProducts || []).filter(p => p && p.name);
+  const invoices = (rawInvoices || []).filter(inv => inv && inv.customerId && inv.invoiceNumber);
+  const customers = (rawCustomers || []).filter(c => c && c.id && c.name);
   const [showModal, setShowModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,6 +26,10 @@ const Invoices = () => {
   });
 
   const getInvoiceStatus = (invoice) => {
+    if (!invoice || !invoice.dueDate || typeof invoice.total !== 'number') {
+      return 'unknown';
+    }
+    
     const today = new Date();
     const dueDate = new Date(invoice.dueDate);
     
@@ -34,9 +40,12 @@ const Invoices = () => {
 
   const getFilteredInvoices = () => {
     return invoices.filter(invoice => {
-      const customer = customers.find(c => c.id === invoice.customerId);
+      // Add null safety check
+      if (!invoice || !invoice.customerId || !invoice.invoiceNumber) return false;
+      
+      const customer = customers.find(c => c && c.id === invoice.customerId);
       const matchesSearch = invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer && customer.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        (customer && customer.name && customer.name.toLowerCase().includes(searchTerm.toLowerCase()));
       
       if (statusFilter === 'all') return matchesSearch;
       return matchesSearch && getInvoiceStatus(invoice) === statusFilter;
@@ -44,7 +53,8 @@ const Invoices = () => {
   };
 
   const getCustomerInfo = (customerId) => {
-    return customers.find(c => c.id === customerId);
+    if (!customerId) return null;
+    return customers.find(c => c && c.id === customerId);
   };
 
   const handleInputChange = (e) => {
@@ -104,20 +114,50 @@ const Invoices = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validate required fields
+    if (!formData.customerId) {
+      alert('Please select a customer');
+      return;
+    }
+    
+    if (!formData.number) {
+      alert('Please enter an invoice number');
+      return;
+    }
+    
+    if (!formData.issueDate || !formData.dueDate) {
+      alert('Please enter both issue date and due date');
+      return;
+    }
+    
+    if (!formData.items || formData.items.length === 0) {
+      alert('Please add at least one item to the invoice');
+      return;
+    }
+    
     const total = calculateTotal(formData.items);
     const invoiceData = {
-      ...formData,
-      total,
+      invoiceNumber: formData.number,
+      customerId: formData.customerId,
+      issueDate: formData.issueDate,
+      dueDate: formData.dueDate,
+      status: editingInvoice ? editingInvoice.status : 'draft',
       subtotal: total,
-      tax: 0, // Can be enhanced later
-      status: editingInvoice ? editingInvoice.status : 'draft'
+      taxAmount: 0, // Schema expects taxAmount, not tax
+      discountAmount: 0,
+      total,
+      notes: formData.notes || '',
+      terms: formData.terms || ''
+      // Don't send items directly - they will be created separately
     };
 
     try {
+      console.log('Submitting invoice data:', invoiceData);
+      
       if (editingInvoice) {
-        await api.invoices.update(editingInvoice.id, invoiceData);
+        await api.invoices.update(editingInvoice.id, invoiceData, formData.items);
       } else {
-        await api.invoices.create(invoiceData);
+        await api.invoices.create(invoiceData, formData.items);
       }
       
       resetForm();
@@ -148,41 +188,66 @@ const Invoices = () => {
 
 
   return (
-    <div className="invoices-page">
-      <div className="page-header">
-        <div>
-          <h1>Invoices</h1>
-          <p>Create and manage customer invoices</p>
+    <div>
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>Invoices</h1>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
+            className="btn btn-primary"
+          >
+            <Plus size={20} />
+            Create Invoice
+          </button>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          className="btn btn-primary"
-        >
-          <Plus size={20} />
-          Create Invoice
-        </button>
-      </div>
+        <p style={{ color: '#6b7280', margin: '0' }}>Create and manage customer invoices</p>
 
-      {/* Search and Filters */}
-      <div className="search-filters card">
-        <div className="search-bar">
-          <Search size={20} />
-          <input
-            type="text"
-            placeholder="Search invoices by number or customer..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="form-control"
-          />
-        </div>
-        <div className="filter-controls">
+        {/* Error Display */}
+        {error && (
+          <div style={{ 
+            backgroundColor: '#fee2e2', 
+            border: '1px solid #fecaca', 
+            borderRadius: '6px', 
+            padding: '12px', 
+            marginTop: '16px',
+            color: '#dc2626'
+          }}>
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', marginTop: '16px' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+            <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+            <input
+              type="text"
+              placeholder="Search invoices by number or customer..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px 8px 44px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="form-control"
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              fontSize: '14px',
+              backgroundColor: 'white',
+              minWidth: '150px'
+            }}
           >
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
@@ -193,85 +258,183 @@ const Invoices = () => {
       </div>
 
       {/* Invoices Table */}
-      <div className="invoices-table card">
-        <div className="table-header">
-          <h2>Invoices ({filteredInvoices.length})</h2>
+      <div className="card">
+        <div style={{ padding: '24px 24px 0 24px', borderBottom: '1px solid #e5e7eb' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', margin: '0 0 24px 0' }}>
+            Invoices ({filteredInvoices.length})
+          </h2>
         </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Invoice</th>
-              <th>Customer</th>
-              <th>Issue Date</th>
-              <th>Due Date</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredInvoices.map((invoice) => {
-              const customer = getCustomerInfo(invoice.customerId);
-              const status = getInvoiceStatus(invoice);
-              
-              return (
-                <tr key={invoice.id}>
-                  <td>#{invoice.invoiceNumber}</td>
-                  <td>{customer ? customer.name : 'Unknown Customer'}</td>
-                  <td>{format(new Date(invoice.issueDate), 'MMM dd, yyyy')}</td>
-                  <td>{format(new Date(invoice.dueDate), 'MMM dd, yyyy')}</td>
-                  <td className="amount">${invoice.total.toFixed(2)}</td>
-                  <td>
-                    <span className={`status-badge status-${status}`}>
-                      {status}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="action-buttons">
-                      <button
-                        onClick={() => handleEdit(invoice)}
-                        className="btn-icon edit"
-                        title="Edit Invoice"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(invoice.id)}
-                        className="btn-icon delete"
-                        title="Delete Invoice"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
+        
+        {loading ? (
+          <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
+            <div style={{ fontSize: '18px' }}>Loading invoices...</div>
+          </div>
+        ) : filteredInvoices.length === 0 ? (
+          <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>No invoices found</h3>
+            <p style={{ margin: '0' }}>Get started by creating your first invoice.</p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice</th>
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Customer</th>
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Issue Date</th>
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Due Date</th>
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount</th>
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {filteredInvoices.length === 0 && (
-          <div className="empty-state">
-            <p>No invoices found.</p>
+              </thead>
+              <tbody>
+                {filteredInvoices.map((invoice) => {
+                  const customer = getCustomerInfo(invoice.customerId);
+                  const status = getInvoiceStatus(invoice);
+                  
+                  return (
+                    <tr key={invoice.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
+                        #{invoice.invoiceNumber}
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', color: '#1f2937' }}>
+                        {customer ? customer.name : 'Unknown Customer'}
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', color: '#6b7280' }}>
+                        {format(new Date(invoice.issueDate), 'MMM dd, yyyy')}
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', color: '#6b7280' }}>
+                        {format(new Date(invoice.dueDate), 'MMM dd, yyyy')}
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', color: '#1f2937', fontWeight: '500' }}>
+                        ${invoice.total.toFixed(2)}
+                      </td>
+                      <td style={{ padding: '16px 24px' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          textTransform: 'capitalize',
+                          backgroundColor: 
+                            status === 'paid' ? '#dcfce7' : 
+                            status === 'overdue' ? '#fee2e2' : 
+                            status === 'unknown' ? '#f3f4f6' : '#fef3c7',
+                          color: 
+                            status === 'paid' ? '#16a34a' : 
+                            status === 'overdue' ? '#dc2626' : 
+                            status === 'unknown' ? '#6b7280' : '#d97706'
+                        }}>
+                          {status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 24px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => handleEdit(invoice)}
+                            style={{
+                              padding: '6px',
+                              border: 'none',
+                              borderRadius: '4px',
+                              backgroundColor: '#f3f4f6',
+                              color: '#6b7280',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Edit Invoice"
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#e5e7eb'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(invoice.id)}
+                            style={{
+                              padding: '6px',
+                              border: 'none',
+                              borderRadius: '4px',
+                              backgroundColor: '#fee2e2',
+                              color: '#dc2626',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Delete Invoice"
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#fecaca'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#fee2e2'}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
       {/* Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal large" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingInvoice ? 'Edit Invoice' : 'Create New Invoice'}</h2>
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '800px',
+              maxHeight: '90vh',
+              overflow: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', margin: '0' }}>
+                {editingInvoice ? 'Edit Invoice' : 'Create New Invoice'}
+              </h2>
               <button 
-                className="modal-close"
+                type="button"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  color: '#6b7280',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
                 onClick={() => setShowModal(false)}
               >
                 ×
               </button>
             </div>
+            
             <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="form-row">
+              <div>
+                {/* Basic Invoice Information */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                   <div className="form-group">
                     <label className="form-label">Customer *</label>
                     <select
@@ -282,7 +445,7 @@ const Invoices = () => {
                       required
                     >
                       <option value="">Select a customer</option>
-                      {customers.map(customer => (
+                      {customers.filter(customer => customer && customer.id && customer.name).map(customer => (
                         <option key={customer.id} value={customer.id}>
                           {customer.name}
                         </option>
@@ -301,7 +464,8 @@ const Invoices = () => {
                     />
                   </div>
                 </div>
-                <div className="form-row">
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                   <div className="form-group">
                     <label className="form-label">Issue Date *</label>
                     <input
@@ -327,20 +491,29 @@ const Invoices = () => {
                 </div>
 
                 {/* Invoice Items */}
-                <div className="invoice-items-section">
-                  <div className="section-header">
-                    <h3>Invoice Items</h3>
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '0' }}>Invoice Items</h3>
                     <button
                       type="button"
                       onClick={addItem}
                       className="btn btn-secondary"
+                      style={{ fontSize: '14px', padding: '8px 12px' }}
                     >
+                      <Plus size={16} />
                       Add Item
                     </button>
                   </div>
-                  <div className="items-list">
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
                     {formData.items.map((item, index) => (
-                      <div key={index} className="item-row">
+                      <div key={index} style={{ 
+                        padding: '16px', 
+                        borderBottom: index < formData.items.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 2fr 80px 100px 100px 40px',
+                        gap: '12px',
+                        alignItems: 'end'
+                      }}>
                         <div className="form-group">
                           <label className="form-label">Product</label>
                           <select
@@ -418,7 +591,7 @@ const Invoices = () => {
                   </div>
                 </div>
 
-                <div className="form-row">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                   <div className="form-group">
                     <label className="form-label">Notes</label>
                     <textarea
@@ -443,7 +616,7 @@ const Invoices = () => {
                   </div>
                 </div>
               </div>
-              <div className="modal-actions">
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
                 <button
                   type="button"
                   className="btn btn-secondary"

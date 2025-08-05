@@ -124,7 +124,7 @@ const Reports = () => {
   }
 
   return (
-    <div className="reports-page">
+    <div className="">
       <div className="page-header">
         <div>
           <h1>Reports & Analytics</h1>

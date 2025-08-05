@@ -5,7 +5,12 @@ import { format } from 'date-fns';
 
 const Payments = () => {
   const { state, api } = useBilling();
-  const { payments, invoices, customers, loading } = state;
+  const { payments: rawPayments, invoices: rawInvoices, customers: rawCustomers, loading, error } = state;
+  
+  // Ensure all arrays are safe with valid objects
+  const payments = (rawPayments || []).filter(p => p && p.invoiceId && typeof p.amount === 'number');
+  const invoices = (rawInvoices || []).filter(inv => inv && inv.customerId && inv.invoiceNumber);
+  const customers = (rawCustomers || []).filter(c => c && c.id && c.name);
   const [showModal, setShowModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,32 +27,39 @@ const Payments = () => {
   const paymentMethods = ['Bank Transfer', 'Credit Card', 'Check', 'Cash', 'PayPal', 'Wire Transfer', 'ACH'];
 
   const getInvoiceInfo = (invoiceId) => {
-    return invoices.find(inv => inv.id === invoiceId);
+    if (!invoiceId) return null;
+    return invoices.find(inv => inv && inv.id === invoiceId);
   };
 
   const getCustomerInfo = (customerId) => {
-    return customers.find(cust => cust.id === customerId);
+    if (!customerId) return null;
+    return customers.find(cust => cust && cust.id === customerId);
   };
 
   const getUnpaidInvoices = () => {
     return invoices.filter(invoice => {
+      if (!invoice || !invoice.id || typeof invoice.total !== 'number') return false;
+      
       const totalPaid = payments
-        .filter(payment => payment.invoiceId === invoice.id)
-        .reduce((sum, payment) => sum + payment.amount, 0);
+        .filter(payment => payment && payment.invoiceId === invoice.id)
+        .reduce((sum, payment) => sum + (payment.amount || 0), 0);
       return totalPaid < invoice.total;
     });
   };
 
   const getFilteredPayments = () => {
     return payments.filter(payment => {
+      // Add null safety check
+      if (!payment || !payment.invoiceId) return false;
+      
       const invoice = getInvoiceInfo(payment.invoiceId);
       const customer = invoice ? getCustomerInfo(invoice.customerId) : null;
       
       const matchesSearch = 
-        payment.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.notes.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (invoice && invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+        (payment.reference && payment.reference.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (payment.notes && payment.notes.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (customer && customer.name && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (invoice && invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()));
       
       if (methodFilter === 'all') return matchesSearch;
       return matchesSearch && payment.method === methodFilter;
@@ -69,13 +81,39 @@ const Payments = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validate required fields
+    if (!formData.invoiceId) {
+      alert('Please select an invoice');
+      return;
+    }
+    
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      alert('Please enter a valid payment amount');
+      return;
+    }
+    
+    if (!formData.paymentDate) {
+      alert('Please enter a payment date');
+      return;
+    }
+    
+    if (!formData.method) {
+      alert('Please select a payment method');
+      return;
+    }
+    
     const paymentData = {
-      ...formData,
-      invoiceId: parseInt(formData.invoiceId),
-      amount: parseFloat(formData.amount)
+      invoiceId: formData.invoiceId, // Keep as string for Amplify GraphQL
+      amount: parseFloat(formData.amount),
+      paymentDate: formData.paymentDate,
+      method: formData.method,
+      reference: formData.reference || '',
+      notes: formData.notes || ''
     };
 
     try {
+      console.log('Submitting payment data:', paymentData);
+      
       if (editingPayment) {
         await api.payments.update(editingPayment.id, paymentData);
       } else {
@@ -84,6 +122,7 @@ const Payments = () => {
       }
 
       resetForm();
+      setShowModal(false);
     } catch (error) {
       console.error('Error saving payment:', error);
       alert('Failed to save payment. Please try again.');
@@ -132,15 +171,30 @@ const Payments = () => {
   const unpaidInvoices = getUnpaidInvoices();
 
   // Calculate summary stats
-  const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const totalPayments = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
   const paymentsThisMonth = payments.filter(payment => {
+    if (!payment || !payment.paymentDate) return false;
     const paymentDate = new Date(payment.paymentDate);
     const now = new Date();
     return paymentDate.getMonth() === now.getMonth() && paymentDate.getFullYear() === now.getFullYear();
-  }).reduce((sum, payment) => sum + payment.amount, 0);
+  }).reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
   return (
     <div>
+      {/* Error Display */}
+      {error && (
+        <div style={{ 
+          backgroundColor: '#fee2e2', 
+          border: '1px solid #fecaca', 
+          borderRadius: '6px', 
+          padding: '12px', 
+          marginBottom: '16px',
+          color: '#dc2626'
+        }}>
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '24px' }}>
         <div className="card" style={{ padding: '20px' }}>
@@ -356,16 +410,16 @@ const Payments = () => {
                   required
                 >
                   <option value="">Select an invoice</option>
-                  {unpaidInvoices.map(invoice => {
+                  {unpaidInvoices.filter(invoice => invoice && invoice.id).map(invoice => {
                     const customer = getCustomerInfo(invoice.customerId);
                     const totalPaid = payments
-                      .filter(p => p.invoiceId === invoice.id)
-                      .reduce((sum, p) => sum + p.amount, 0);
-                    const remaining = invoice.total - totalPaid;
+                      .filter(p => p && p.invoiceId === invoice.id)
+                      .reduce((sum, p) => sum + (p.amount || 0), 0);
+                    const remaining = (invoice.total || 0) - totalPaid;
                     
                     return (
                       <option key={invoice.id} value={invoice.id}>
-                        {invoice.invoiceNumber} - {customer?.name} (${remaining.toFixed(2)} remaining)
+                        {invoice.invoiceNumber} - {customer?.name || 'Unknown Customer'} (${remaining.toFixed(2)} remaining)
                       </option>
                     );
                   })}
