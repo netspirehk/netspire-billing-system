@@ -29,6 +29,11 @@ export const handler = async (event: any) => {
       return json(400, { error: 'Missing required fields: from, to, subject' });
     }
 
+    // Ensure at least one of text or html is provided
+    if (!body.text && !body.html) {
+      return json(400, { error: 'Either text or html content is required' });
+    }
+
     const toArray = Array.isArray(body.to) ? body.to : [body.to];
 
     const attachments = (body.attachments || []).map(att => {
@@ -49,13 +54,16 @@ export const handler = async (event: any) => {
       return undefined;
     }).filter(Boolean) as Array<any>;
 
+    // Resend types require a string for text; generate a fallback from HTML if needed
+    const textContent: string = body.text ?? (body.html ? htmlToText(body.html) : '');
+
     const { data, error } = await resend.emails.send({
       from: body.from,
       to: toArray,
       subject: body.subject,
-      text: body.text,
+      text: textContent,
       html: body.html,
-      attachments,
+      attachments: attachments.length ? attachments : undefined,
     });
 
     if (error) {
@@ -84,6 +92,25 @@ function json(statusCode: number, body: unknown) {
 function safeJsonParse(input: string | undefined): any {
   if (!input) return undefined;
   try { return JSON.parse(input); } catch { return undefined; }
+}
+
+// Minimal HTML to plaintext conversion to satisfy Resend's required text field
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>(\s*)/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    .replace(/<li>/gi, ' - ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 
