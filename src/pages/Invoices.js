@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Edit, Trash2, Calendar, DollarSign } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Calendar, DollarSign, Send } from 'lucide-react';
 import { useBilling } from '../context/AmplifyBillingContext';
 import { format } from 'date-fns';
 
@@ -182,6 +182,20 @@ const Invoices = () => {
         console.error('Error deleting invoice:', error);
         alert('Failed to delete invoice. Please try again.');
       }
+    }
+  };
+
+  const handleSendEmail = async (invoice) => {
+    const customer = getCustomerInfo(invoice.customerId);
+    const confirmMessage = `Send invoice #${invoice.invoiceNumber} to ${customer?.email || customer?.name || 'customer'}?`;
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      await api.invoices.send(invoice.id);
+      alert('Invoice marked as sent.');
+    } catch (error) {
+      console.error('Error sending invoice email:', error);
+      alert('Failed to mark invoice as sent.');
     }
   };
 
@@ -370,6 +384,25 @@ const Invoices = () => {
                             onMouseOut={(e) => e.target.style.backgroundColor = '#fee2e2'}
                           >
                             <Trash2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleSendEmail(invoice)}
+                            style={{
+                              padding: '6px',
+                              border: 'none',
+                              borderRadius: '4px',
+                              backgroundColor: '#e0f2fe',
+                              color: '#0284c7',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Send Invoice Email"
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#bae6fd'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#e0f2fe'}
+                          >
+                            <Send size={16} />
                           </button>
                         </div>
                       </td>

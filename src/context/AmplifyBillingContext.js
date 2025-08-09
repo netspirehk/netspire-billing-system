@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
+import outputs from '../amplify_outputs.json';
 
 const BillingContext = createContext();
 
@@ -445,14 +446,49 @@ export function BillingProvider({ children }) {
       },
 
       // Send invoice via email
-      send: async (invoiceId) => {
+      send: async (invoiceId, payload = {}) => {
         try {
+          const invoice = state.invoices.find(inv => inv && inv.id === invoiceId);
+          if (!invoice) throw new Error('Invoice not found');
+          const customer = state.customers.find(c => c && c.id === invoice.customerId);
+          if (!customer || !customer.email) throw new Error('Customer email not found');
 
-          // This would trigger a Lambda function to send email
-          const result = await client.models.Invoice.update({ 
-            id: invoiceId, 
+          const fromEmail = process.env.REACT_APP_FROM_EMAIL || 'billing@yourdomain.com';
+          const subject = `Invoice #${invoice.invoiceNumber} from Netspire`;
+          const html = `
+            <p>Dear ${customer.name || 'Customer'},</p>
+            <p>Please find your invoice details below:</p>
+            <ul>
+              <li>Invoice Number: ${invoice.invoiceNumber}</li>
+              <li>Issue Date: ${invoice.issueDate}</li>
+              <li>Due Date: ${invoice.dueDate}</li>
+              <li>Amount Due: $${Number(invoice.total || 0).toFixed(2)}</li>
+            </ul>
+            ${invoice.pdfUrl ? `<p>You can download your invoice PDF here: <a href="${invoice.pdfUrl}">Download PDF</a></p>` : ''}
+            <p>Thank you for your business.</p>
+          `;
+
+          const response = await fetch(getEmailFunctionUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: fromEmail,
+              to: customer.email,
+              subject,
+              html,
+              ...payload, // allow overrides (e.g., custom subject/html)
+            }),
+          });
+
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || 'Email send failed');
+          }
+
+          const result = await client.models.Invoice.update({
+            id: invoiceId,
             status: 'sent',
-            sentAt: new Date().toISOString()
+            sentAt: new Date().toISOString(),
           });
           dispatch({ type: 'UPDATE_INVOICE', payload: result.data });
           return result.data;
@@ -547,6 +583,17 @@ export function BillingProvider({ children }) {
     refresh: loadAllData,
     clearError: () => dispatch({ type: 'SET_ERROR', payload: null })
   };
+
+  function getEmailFunctionUrl() {
+    // Prefer env override, then Amplify outputs if present
+    const envUrl = process.env.REACT_APP_EMAIL_FUNCTION_URL;
+    const outputsUrl = outputs?.custom?.sendEmailFunctionUrl || outputs?.functions?.sendEmail?.url;
+    const finalUrl = envUrl || outputsUrl;
+    if (!finalUrl) {
+      throw new Error('Email function URL is not configured. Set REACT_APP_EMAIL_FUNCTION_URL in your .env to the Lambda Function URL, then restart the dev server.');
+    }
+    return finalUrl;
+  }
 
   // Real-time subscriptions (disabled for SimpleAuth compatibility)
   // TODO: Re-enable when using full Amplify authentication
