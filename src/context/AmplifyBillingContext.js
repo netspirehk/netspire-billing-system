@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
+
 import outputs from '../amplify_outputs.json';
 
 const BillingContext = createContext();

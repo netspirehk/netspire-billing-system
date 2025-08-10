@@ -23,9 +23,6 @@ function json(statusCode: number, body: unknown) {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': 'http://localhost:3000',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
     body: JSON.stringify(body),
   };
@@ -38,26 +35,30 @@ function safeJsonParse(input: string | undefined): any {
 
 // Handle OPTIONS preflight requests
 export const handler = async (event: any) => {
-  // Handle CORS preflight
+  // Handle CORS preflight - Function URL handles this automatically
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
       headers: {
-        'Access-Control-Allow-Origin': 'http://localhost:3000',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Content-Type': 'application/json',
       },
       body: '',
     };
   }
 
   try {
+    console.log('Event received:', JSON.stringify(event, null, 2));
+    
     if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY is not configured');
       return json(500, { error: 'RESEND_API_KEY is not configured' });
     }
 
     const body: SendEmailPayload = safeJsonParse(event.body);
+    console.log('Parsed body:', JSON.stringify(body, null, 2));
+    
     if (!body || !body.from || !body.to || !body.subject) {
+      console.error('Missing required fields:', { from: body?.from, to: body?.to, subject: body?.subject });
       return json(400, { error: 'Missing required fields: from, to, subject' });
     }
 
@@ -81,6 +82,15 @@ export const handler = async (event: any) => {
       return undefined;
     }).filter(Boolean) as Array<any>;
 
+    console.log('Sending email with Resend:', {
+      from: body.from,
+      to: toArray,
+      subject: body.subject,
+      hasHtml: !!body.html,
+      hasText: !!body.text,
+      attachmentsCount: attachments.length
+    });
+
     const { data, error } = await resend.emails.send({
       from: body.from,
       to: toArray,
@@ -91,11 +101,14 @@ export const handler = async (event: any) => {
     });
 
     if (error) {
+      console.error('Resend API error:', error);
       return json(502, { error: error.message || 'Failed to send email' });
     }
 
+    console.log('Email sent successfully:', data?.id);
     return json(200, { id: data?.id });
   } catch (err: any) {
+    console.error('Unexpected error:', err);
     return json(500, { error: err?.message || 'Unexpected error' });
   }
 };
