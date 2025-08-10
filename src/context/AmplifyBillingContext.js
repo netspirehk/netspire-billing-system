@@ -465,7 +465,8 @@ export function BillingProvider({ children }) {
               <li>Due Date: ${invoice.dueDate}</li>
               <li>Amount Due: $${Number(invoice.total || 0).toFixed(2)}</li>
             </ul>
-            ${invoice.pdfUrl ? `<p>You can download your invoice PDF here: <a href="${invoice.pdfUrl}">Download PDF</a></p>` : ''}
+            <p><strong>Your invoice PDF is attached to this email.</strong></p>
+            ${invoice.pdfUrl ? `<p>You can also download your invoice PDF here: <a href="${invoice.pdfUrl}">Download PDF</a></p>` : ''}
             <p>Thank you for your business.</p>
           `;
 
@@ -477,6 +478,25 @@ export function BillingProvider({ children }) {
               to: customer.email,
               subject,
               html,
+              generatePdf: true,
+              invoice: {
+                id: invoice.id,
+                invoiceNumber: invoice.invoiceNumber,
+                issueDate: invoice.issueDate,
+                dueDate: invoice.dueDate,
+                subtotal: invoice.subtotal || 0,
+                taxAmount: invoice.taxAmount || 0,
+                discountAmount: invoice.discountAmount || 0,
+                total: invoice.total || 0,
+                terms: invoice.terms,
+                notes: invoice.notes,
+                items: invoice.items || []
+              },
+              customer: {
+                name: customer.name,
+                email: customer.email,
+                address: customer.address
+              },
               ...payload, // allow overrides (e.g., custom subject/html)
             }),
           });

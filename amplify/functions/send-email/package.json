@@ -1,0 +1,16 @@
+{
+  "name": "send-email-function",
+  "version": "1.0.0",
+  "description": "Lambda function to send emails with invoice attachments",
+  "main": "handler.js",
+  "dependencies": {
+    "resend": "^4.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.1",
+    "date-fns": "^2.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0"
+  }
+}
