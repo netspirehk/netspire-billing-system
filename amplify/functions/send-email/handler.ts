@@ -1,27 +1,8 @@
 import { Resend } from 'resend';
 import { format } from 'date-fns';
 
-// Note: jsPDF will be imported dynamically due to Node.js compatibility
-let jsPDF: any;
-let autoTable: any;
-
-// Dynamically import jsPDF (Node.js compatible)
-async function loadJsPDF() {
-  if (!jsPDF) {
-    try {
-      const jsPDFModule = require('jspdf');
-      jsPDF = jsPDFModule.default || jsPDFModule;
-      
-      // Load autoTable plugin
-      const autoTableModule = require('jspdf-autotable');
-      autoTable = autoTableModule.default || autoTableModule;
-    } catch (error) {
-      console.error('Error loading jsPDF modules:', error);
-      throw new Error('Failed to load PDF generation modules');
-    }
-  }
-  return { jsPDF, autoTable };
-}
+// Import PDF wrapper
+const { generateInvoicePDF: generatePDF } = require('./pdfWrapper');
 
 type AttachmentInput = {
   filename: string;
@@ -84,121 +65,9 @@ function safeJsonParse(input: string | undefined): any {
   try { return JSON.parse(input); } catch { return undefined; }
 }
 
-// Generate PDF invoice
+// Generate PDF invoice using wrapper
 async function generateInvoicePDF(invoice: InvoiceData, customer: CustomerData): Promise<Buffer> {
-  const { jsPDF, autoTable } = await loadJsPDF();
-  
-  const doc = new jsPDF();
-  
-  // Company header
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Netspire', 20, 30);
-  
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('123 Business Street', 20, 40);
-  doc.text('Suite 100', 20, 45);
-  doc.text('Your City, State 12345', 20, 50);
-  doc.text('Phone: (555) 123-4567', 20, 55);
-  doc.text('billing@netspire.com', 20, 60);
-
-  // Invoice title and number
-  doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
-  doc.text('INVOICE', 140, 30);
-  
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Invoice #: ${invoice.invoiceNumber}`, 140, 45);
-  doc.text(`Date: ${format(new Date(invoice.issueDate), 'MMM dd, yyyy')}`, 140, 55);
-  doc.text(`Due Date: ${format(new Date(invoice.dueDate), 'MMM dd, yyyy')}`, 140, 65);
-
-  // Customer information
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Bill To:', 20, 80);
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text(customer.name, 20, 90);
-  
-  if (customer.address) {
-    const addressLines = customer.address.split('\n');
-    addressLines.forEach((line, index) => {
-      doc.text(line, 20, 100 + (index * 5));
-    });
-  }
-
-  // Invoice items table
-  const tableData = invoice.items.map(item => [
-    item.description,
-    item.quantity.toString(),
-    `$${item.rate.toFixed(2)}`,
-    `$${item.amount.toFixed(2)}`
-  ]);
-
-  doc.autoTable({
-    startY: 120,
-    head: [['Description', 'Qty', 'Rate', 'Amount']],
-    body: tableData,
-    theme: 'grid',
-    headStyles: {
-      fillColor: [41, 128, 185],
-      textColor: 255,
-      fontStyle: 'bold'
-    },
-    styles: {
-      fontSize: 10,
-      cellPadding: 5
-    },
-    columnStyles: {
-      1: { halign: 'center' },
-      2: { halign: 'right' },
-      3: { halign: 'right' }
-    }
-  });
-
-  // Totals
-  const finalY = doc.lastAutoTable.finalY + 10;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Subtotal: $${invoice.subtotal.toFixed(2)}`, 140, finalY + 10);
-  
-  if (invoice.taxAmount > 0) {
-    doc.text(`Tax: $${invoice.taxAmount.toFixed(2)}`, 140, finalY + 20);
-  }
-  
-  if (invoice.discountAmount > 0) {
-    doc.text(`Discount: -$${invoice.discountAmount.toFixed(2)}`, 140, finalY + 30);
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(`Total: $${invoice.total.toFixed(2)}`, 140, finalY + 40);
-
-  // Payment terms and notes
-  if (invoice.terms) {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Terms & Conditions:', 20, finalY + 60);
-    doc.setFont('helvetica', 'normal');
-    doc.text(invoice.terms, 20, finalY + 70, { maxWidth: 170 });
-  }
-
-  if (invoice.notes) {
-    doc.setFont('helvetica', 'bold');
-    doc.text('Notes:', 20, finalY + 90);
-    doc.setFont('helvetica', 'normal');
-    doc.text(invoice.notes, 20, finalY + 100, { maxWidth: 170 });
-  }
-
-  // Footer
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.text('Thank you for your business!', 20, 280);
-
-  // Return as Buffer
-  return Buffer.from(doc.output('arraybuffer'));
+  return generatePDF(invoice, customer);
 }
 
 // Handle OPTIONS preflight requests
