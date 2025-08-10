@@ -8,12 +8,17 @@ let autoTable: any;
 // Dynamically import jsPDF (Node.js compatible)
 async function loadJsPDF() {
   if (!jsPDF) {
-    const jsPDFModule = await import('jspdf');
-    jsPDF = jsPDFModule.default;
-    
-    // Load autoTable plugin
-    const autoTableModule = await import('jspdf-autotable');
-    autoTable = autoTableModule.default;
+    try {
+      const jsPDFModule = require('jspdf');
+      jsPDF = jsPDFModule.default || jsPDFModule;
+      
+      // Load autoTable plugin
+      const autoTableModule = require('jspdf-autotable');
+      autoTable = autoTableModule.default || autoTableModule;
+    } catch (error) {
+      console.error('Error loading jsPDF modules:', error);
+      throw new Error('Failed to load PDF generation modules');
+    }
   }
   return { jsPDF, autoTable };
 }
